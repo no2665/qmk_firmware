@@ -14,10 +14,14 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 #include QMK_KEYBOARD_H
-#include "print.h"
+#include OLED_FONT_H
 
 #define _MA 0
 #define _FN 1
+
+#define USB_HID_CHAR_A 61
+#define USB_HID_CHAR_1 19
+#define USB_HID_CHAR_0 9
 
 enum custom_keycodes {
   KC_CUST = SAFE_RANGE,
@@ -41,112 +45,181 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
 
 };
 
+#define MAX_CHARACTERS_ON_SCREEN 100
 typedef struct {
     char    character;
     uint8_t x;
     uint8_t y;
+    uint32_t last_update;
+    uint8_t speed;
 } Character;
-struct Character_list {
-    size_t size;
-    Character *list;
-} characters;
 
-const uint8_t speed = 8;
+Character characters[MAX_CHARACTERS_ON_SCREEN];
+uint8_t characters_size = 0;
+uint8_t character_to_update = 0;
+
 uint32_t prevTime;
 
-void keyboard_post_init_user(void) {
-    prevTime = timer_read32();
-    debug_enable = true;
-}
-
 void add_character_to_screen(char c) {
+
+    if ( characters_size >= MAX_CHARACTERS_ON_SCREEN ) {
+        return;
+    }
+
     Character n;
     n.character = c;
     n.y         = 0;
-    n.x         = rand() % oled_max_chars();
+    n.x         = rand() % ( OLED_DISPLAY_HEIGHT - OLED_FONT_WIDTH );
+    n.last_update = timer_read32();
+    n.speed     = rand() % 3;
 
-    if ( characters.size == 0 ) {
-        characters.list = (Character *) malloc( sizeof( Character ) );
-        characters.size = 1;
-    } else {
-        characters.list = (Character *) realloc(characters.list, characters.size * sizeof(Character));
-        characters.size += 1;
-    }
-
-    characters.list[ characters.size - 1 ] = n;
+    characters[characters_size] = n;
+    characters_size += 1;
 }
 
-void remove_characters_from_screen(void) {
-    size_t initialSize = characters.size;
-    for ( int i = 0; i < characters.size; i++ ) {
-        Character t = characters.list[i];
-        if (t.y > oled_max_lines() ) {
-            for ( int x = i + 1; x < characters.size; x++ ) {
-                characters.list[x - 1] = characters.list[x];
+void write_character_to_screen( uint8_t idx, uint8_t moved_by ) {
+    Character c = characters[idx];
+
+    uint8_t font_character[OLED_FONT_WIDTH];
+    uint8_t cast_data = (uint8_t) c.character;  // font based on unsigned type for index
+    if (cast_data < OLED_FONT_START || cast_data > OLED_FONT_END) {
+        memset(font_character, 0x00, OLED_FONT_WIDTH);
+    } else {
+        const uint8_t *glyph = &font[(cast_data - OLED_FONT_START) * OLED_FONT_WIDTH];
+        memcpy_P(font_character, glyph, OLED_FONT_WIDTH);
+    }
+
+    for ( uint8_t i = 0; i < OLED_FONT_WIDTH; i++ ) {
+        uint8_t glyph_byte = font_character[ i ];
+        for ( uint8_t y = 0; y < 8; y++ ) {
+            if ( c.y + y > OLED_FONT_HEIGHT ) {
+                uint8_t bit = (glyph_byte >> y) & 1;
+                oled_write_pixel( c.x + i, c.y + y - OLED_FONT_HEIGHT, bit );
             }
-            characters.size -= 1;
+        }
+        for ( uint8_t j = 1; j <= moved_by; j++ ) {
+            if ( c.y - j > OLED_FONT_HEIGHT ) {
+                oled_write_pixel( c.x + i, c.y - j - OLED_FONT_HEIGHT, false );
+            }
         }
     }
-    if ( characters.size != initialSize ) {
-        characters.list = (Character *)realloc(characters.list, characters.size * sizeof(Character));
+}
+
+uint8_t update_character( uint8_t idx, uint32_t time_now ) {
+    Character *c = &characters[idx];
+    uint32_t diff = time_now - c->last_update;
+    uint32_t speed_time = (c->speed * 10) + 10;
+    if ( diff > speed_time ) {
+        uint8_t delta = (uint8_t) (diff / speed_time);
+        c->y += delta;
+        c->last_update = time_now - (diff - ( speed_time * delta));
+        return delta;
     }
+    return 0;
+}
+
+bool remove_character_at( uint8_t idx ) {
+    Character c = characters[idx];
+    if ( c.y > OLED_DISPLAY_WIDTH + OLED_FONT_HEIGHT ) {
+        for ( uint8_t x = idx + 1; x < characters_size; x++ ) {
+            characters[x - 1] = characters[x];
+        }
+        characters_size -= 1;
+        return true;
+    }
+    return false;
+}
+
+bool send_alternate_keycode(uint16_t keycode, keyrecord_t *record) {
+    if ( record->event.pressed ) {
+        register_code(keycode);
+    } else {
+        unregister_code(keycode);
+    }
+    return false;
+}
+
+/**
+ * Set up keyboard variables
+ */
+void keyboard_post_init_user(void) {
+    prevTime = timer_read32();
+}
+
+/**
+ *
+ */
+void oled_task_user(void) {
+    if ( characters_size == 0 ) {
+        return;
+    }
+    uint32_t now = timer_read32();
+    if ( character_to_update >= characters_size ) {
+        character_to_update = 0;
+    }
+    uint8_t moved_by = update_character( character_to_update, now );
+    write_character_to_screen( character_to_update, moved_by );
+    if ( ! remove_character_at( character_to_update ) ) {
+        character_to_update += 1;
+    }
+}
+
+oled_rotation_t oled_init_user(oled_rotation_t rotation) {
+    return OLED_ROTATION_90;
 }
 
 bool process_record_user(uint16_t keycode, keyrecord_t *record) {
     // Send keystrokes to host keyboard, if connected (see readme)
     process_record_remote_kb(keycode, record);
 
-    if (record->event.pressed) {
-        if (keycode >= KC_A && keycode <= KC_Z) {
-            add_character_to_screen(keycode + 61);
+    if ( record->event.pressed ) {
+        switch ( keycode ) {
+            case KC_A ... KC_Z:
+                add_character_to_screen( keycode + USB_HID_CHAR_A );
+                break;
+            case KC_1 ... KC_9:
+                add_character_to_screen( keycode + USB_HID_CHAR_1 );
+                break;
+            case KC_0:
+                add_character_to_screen( keycode + USB_HID_CHAR_0 );
+                break;
+            case KC_MINS:
+                add_character_to_screen( keycode );
+                break;
+            case KC_EQL:
+                add_character_to_screen( keycode + 15 );
+                break;
+            case KC_LBRC:
+                add_character_to_screen( keycode + 44 );
+                break;
+            case KC_RBRC:
+                add_character_to_screen( keycode + 45 );
+                break;
+            case KC_SCLN:
+                add_character_to_screen( keycode + 8 );
+                break;
+            case KC_QUOT:
+                add_character_to_screen( keycode + -13 );
+                break;
+            case KC_NUHS:
+                add_character_to_screen( keycode + -15 );
+                break;
+            case KC_COMM:
+                add_character_to_screen( keycode + -10 );
+                break;
+            case KC_DOT:
+            case KC_SLSH:
+                add_character_to_screen( keycode + -9 );
+                break;
         }
+    }
+
+    switch ( keycode ) {
+        case KC_NUHS:
+            return send_alternate_keycode(KC_HASH, record);
     }
 
     return true;
-}
-
-void update_characters(void) {
-    uint32_t now = timer_read32();
-    uint32_t diff = now - prevTime;
-
-    if ( diff > 1000 ) {
-        for (int i = 0; i < characters.size; i++) {
-            characters.list[i].y += 1;
-        }
-        if ( characters.size > 0 ) {
-            dprintf("y is %u", characters.list[0].y);
-        }
-        prevTime = now;
-    }
-}
-
-// static void render_logo(void) {
-//     static const char PROGMEM nibble_logo[] = {0x00, 0xfe, 0xff, 0xff, 0xff, 0xff, 0xfe, 0xf8, 0xf0, 0xc0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xfe, 0xff, 0xff, 0xff, 0xfe, 0x00, 0x00, 0x00, 0x00, 0xfe, 0xff, 0xff, 0xff, 0xfe, 0x00, 0x00, 0x00, 0x00, 0xfc, 0xfe, 0xff, 0xff, 0xff, 0x1f, 0x1f, 0x1f, 0x1f, 0x1f, 0x1f, 0x1f, 0x1f, 0x3f, 0x3e, 0xfe, 0xfe, 0xfc, 0xf8, 0xf0, 0xc0, 0x00, 0x00, 0x00, 0x00, 0xfe, 0xfe, 0xff, 0xff, 0xff, 0x1f, 0x1f, 0x1f, 0x1f, 0x1f, 0x1f, 0x1f, 0x1f, 0x3f, 0x3e, 0xfe, 0xfe, 0xfc, 0xf8, 0xf0, 0xc0, 0x00, 0x00, 0x00, 0xfc, 0xfe, 0xff, 0xff, 0xff, 0xfe, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xfc, 0xfe, 0xff, 0xff, 0xff, 0x1f, 0x1f, 0x1f, 0x1f, 0x1f, 0x1f, 0x1f, 0x1f, 0x1f, 0x1f, 0x1f, 0x1f, 0x1f, 0x1e, 0x0c, 0x00,
-//                                                0x00, 0xff, 0xff, 0xff, 0xff, 0xff, 0x03, 0x0f, 0x1f, 0x7f, 0xff, 0xfe, 0xf8, 0xf0, 0xc0, 0x80, 0x00, 0x00, 0x00, 0x00, 0xff, 0xff, 0xff, 0xff, 0xff, 0x00, 0x00, 0x00, 0x00, 0xff, 0xff, 0xff, 0xff, 0xff, 0x00, 0x00, 0x00, 0x00, 0xff, 0xff, 0xff, 0xff, 0xff, 0xe0, 0xe0, 0xe0, 0xe0, 0xe0, 0xe0, 0xe0, 0xe0, 0xf0, 0xf0, 0xfc, 0xff, 0xff, 0xbf, 0x1f, 0x07, 0x00, 0x00, 0x00, 0x00, 0xff, 0xff, 0xff, 0xff, 0xff, 0xe0, 0xe0, 0xe0, 0xe0, 0xe0, 0xe0, 0xe0, 0xe0, 0xf0, 0xf0, 0xff, 0xff, 0xff, 0xbf, 0x1f, 0x03, 0x00, 0x00, 0x00, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff, 0xff, 0xff, 0xff, 0xff, 0xe0, 0xe0, 0xe0, 0xe0, 0xe0, 0xe0, 0xe0, 0xe0, 0xe0, 0xe0, 0xe0, 0xe0, 0xc0, 0xc0, 0x00, 0x00,
-//                                                0x00, 0xff, 0xff, 0xff, 0xff, 0xff, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03, 0x0f, 0x1f, 0x7f, 0xff, 0xfe, 0xfc, 0xf0, 0xe0, 0xff, 0xff, 0xff, 0xff, 0xff, 0x00, 0x00, 0x00, 0x00, 0xff, 0xff, 0xff, 0xff, 0xff, 0x00, 0x00, 0x00, 0x00, 0xff, 0xff, 0xff, 0xff, 0xff, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x07, 0x0f, 0xff, 0xff, 0xff, 0xfe, 0xfc, 0xe0, 0x00, 0x00, 0xff, 0xff, 0xff, 0xff, 0xff, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x07, 0x0f, 0xff, 0xff, 0xff, 0xfe, 0xf8, 0x00, 0x00, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff, 0xff, 0xff, 0xff, 0xff, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x01, 0x00, 0x00,
-//                                                0x00, 0x7f, 0xff, 0xff, 0xff, 0x7f, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03, 0x07, 0x1f, 0x3f, 0x7f, 0xff, 0xff, 0xff, 0x7f, 0x00, 0x00, 0x00, 0x00, 0x7f, 0xff, 0xff, 0xff, 0x7f, 0x00, 0x00, 0x00, 0x00, 0x3f, 0x7f, 0xff, 0xff, 0xff, 0xf8, 0xf8, 0xf8, 0xf8, 0xf8, 0xf8, 0xf8, 0xf8, 0xf8, 0x7c, 0x7c, 0x7e, 0x7f, 0x3f, 0x1f, 0x0f, 0x07, 0x00, 0x00, 0x00, 0x7f, 0x7f, 0xff, 0xff, 0xff, 0xf8, 0xf8, 0xf8, 0xf8, 0xf8, 0xf8, 0xf8, 0xf8, 0xf8, 0x7c, 0x7c, 0x7e, 0x3f, 0x3f, 0x1f, 0x0f, 0x07, 0x00, 0x00, 0x1f, 0x7f, 0x7f, 0xff, 0xff, 0xff, 0xf8, 0xf8, 0xf8, 0xf8, 0xf8, 0xf8, 0xf8, 0xf8, 0xf8, 0xf8, 0xf8, 0xf8, 0x78, 0x30, 0x3f, 0x7f, 0xff, 0xff, 0xff, 0xf8, 0xf8, 0xf8, 0xf8, 0xf8, 0xf8, 0xf8, 0xf8, 0xf8, 0xf8, 0xf8, 0xf8, 0xf8, 0x78, 0x30, 0x00};
-//     // Host Keyboard Layer Status
-//     oled_write_raw_P(nibble_logo, sizeof(nibble_logo));
-// }
-
-void oled_task_user(void) {
-    //render_logo();
-    update_characters();
-    //oled_clear();
-    for (int i = 0; i < characters.size; i++) {
-        Character t = characters.list[i];
-        if ( t.y <= oled_max_lines() ) {
-            oled_set_cursor(t.x, t.y);
-            oled_write_char(t.character, false);
-        }
-        oled_set_cursor(t.x, t.y-1);
-        oled_write_char(' ', false);
-    }
-    remove_characters_from_screen();
-}
-
-oled_rotation_t oled_init_user(oled_rotation_t rotation) {
-    return OLED_ROTATION_90;
 }
 
 // RGB config, for changing RGB settings on non-VIA firmwares
