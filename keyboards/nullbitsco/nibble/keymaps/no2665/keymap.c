@@ -16,8 +16,9 @@
 #include QMK_KEYBOARD_H
 #include OLED_FONT_H
 
-#define _MA 0
-#define _FN 1
+#define _MAC 0
+#define _WIN 1 // Windows
+#define _FN 2
 
 #define USB_HID_CHAR_A 61
 #define USB_HID_CHAR_1 19
@@ -28,7 +29,14 @@ enum custom_keycodes {
 };
 
 const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
-  [_MA] = LAYOUT_iso(
+  [_MAC] = LAYOUT_iso(
+             KC_ESC,  KC_1,    KC_2,    KC_3,    KC_4,    KC_5,    KC_6,    KC_7,    KC_8,    KC_9,    KC_0,    KC_MINS, KC_EQL,  KC_BSPC, KC_DEL,
+    KC_MUTE, KC_TAB,  KC_Q,    KC_W,    KC_E,    KC_R,    KC_T,    KC_Y,    KC_U,    KC_I,    KC_O,    KC_P,    KC_LBRC, KC_RBRC,          KC_HOME,
+    MO(_FN), KC_CAPS, KC_A,    KC_S,    KC_D,    KC_F,    KC_G,    KC_H,    KC_J,    KC_K,    KC_L,    KC_SCLN, KC_QUOT, KC_ENT,  KC_NUBS, KC_PGUP,
+    XXXXXXX, KC_LSFT, KC_NUHS, KC_Z,    KC_X,    KC_C,    KC_V,    KC_B,    KC_N,    KC_M,    KC_COMM, KC_DOT,  KC_SLSH, KC_RSFT, KC_UP,   KC_PGDN,
+    XXXXXXX, KC_LCTL, KC_LALT, KC_LGUI,                            KC_SPC,                    XXXXXXX, KC_ALGR, KC_RCTL, KC_LEFT, KC_DOWN, KC_RGHT
+  ),
+  [_WIN] = LAYOUT_iso(
              KC_ESC,  KC_1,    KC_2,    KC_3,    KC_4,    KC_5,    KC_6,    KC_7,    KC_8,    KC_9,    KC_0,    KC_MINS, KC_EQL,  KC_BSPC, KC_DEL,
     KC_MUTE, KC_TAB,  KC_Q,    KC_W,    KC_E,    KC_R,    KC_T,    KC_Y,    KC_U,    KC_I,    KC_O,    KC_P,    KC_LBRC, KC_RBRC,          KC_HOME,
     MO(_FN), KC_CAPS, KC_A,    KC_S,    KC_D,    KC_F,    KC_G,    KC_H,    KC_J,    KC_K,    KC_L,    KC_SCLN, KC_QUOT, KC_ENT,  KC_NUHS, KC_PGUP,
@@ -37,9 +45,9 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
   ),
   [_FN] = LAYOUT_iso(
               KC_GRV,   KC_F1,   KC_F2,   KC_F3,   KC_F4,   KC_F5,   KC_F6,   KC_F7,   KC_F8,   KC_F9,  KC_F10,  KC_F11,  KC_F12, _______,  KC_INS,
-    RGB_TOG, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______,           KC_END,
+    RGB_TOG, _______, _______,DF(_WIN), _______, _______, _______, _______, _______, _______, _______, _______, _______, _______,           KC_END,
     _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______,
-    _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______,
+    _______, _______, _______, _______, _______, _______, _______, _______, _______,DF(_MAC), _______, _______, _______, _______, _______, _______,
     _______, _______, _______, _______,                            _______,                   _______, _______, _______, KC_MPRV, KC_MPLY, KC_MNXT
   ),
 
@@ -105,10 +113,11 @@ void write_character_to_screen( uint8_t idx, uint8_t moved_by ) {
     }
 }
 
-uint8_t update_character( uint8_t idx, uint32_t time_now ) {
+uint8_t update_character( uint8_t idx ) {
     Character *c = &characters[idx];
-    uint32_t diff = time_now - c->last_update;
     uint32_t speed_time = (c->speed * 10) + 10;
+    uint32_t time_now = timer_read32();
+    uint32_t diff = time_now - c->last_update;
     if ( diff > speed_time ) {
         uint8_t delta = (uint8_t) (diff / speed_time);
         c->y += delta;
@@ -153,11 +162,10 @@ void oled_task_user(void) {
     if ( characters_size == 0 ) {
         return;
     }
-    uint32_t now = timer_read32();
     if ( character_to_update >= characters_size ) {
         character_to_update = 0;
     }
-    uint8_t moved_by = update_character( character_to_update, now );
+    uint8_t moved_by = update_character( character_to_update );
     write_character_to_screen( character_to_update, moved_by );
     if ( ! remove_character_at( character_to_update ) ) {
         character_to_update += 1;
@@ -172,6 +180,7 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
     // Send keystrokes to host keyboard, if connected (see readme)
     process_record_remote_kb(keycode, record);
 
+    // Send keypresses to the screen
     if ( record->event.pressed ) {
         switch ( keycode ) {
             case KC_A ... KC_Z:
@@ -214,9 +223,34 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
         }
     }
 
-    switch ( keycode ) {
-        case KC_NUHS:
-            return send_alternate_keycode(KC_HASH, record);
+    // Layer specific keycode overrides
+    bool shift = get_mods() & MOD_MASK_SHIFT;
+
+    if ( IS_LAYER_ON(_MAC) ) {
+        static bool shifted_kc_nubs = false;
+
+        switch ( keycode ) {
+            case KC_NUBS: // Creating the # ~ key
+                if ( record->event.pressed ) {
+                    if ( shift ) {
+                        // Do nothing, send ~
+                        shifted_kc_nubs = true;
+                    } else {
+                        // Send #
+                        shifted_kc_nubs = false;
+                        send_alternate_keycode(KC_LALT, record);
+                        return send_alternate_keycode(KC_3, record);
+                    }
+                } else { // released
+                    if ( shifted_kc_nubs ) {
+                        // Do nothing
+                    } else {
+                        // remove #
+                        send_alternate_keycode(KC_3, record);
+                        return send_alternate_keycode(KC_LALT, record);
+                    }
+                }
+        }
     }
 
     return true;
