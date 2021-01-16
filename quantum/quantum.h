@@ -317,6 +317,9 @@ void tap_random_base64(void);
 #define IS_LAYER_ON(layer) layer_state_is(layer)
 #define IS_LAYER_OFF(layer) !layer_state_is(layer)
 
+#define IS_DEFAULT_LAYER_ON(layer) default_layer_state_is(layer)
+#define IS_DEFAULT_LAYER_OFF(layer) !default_layer_state_is(layer)
+
 #define IS_LAYER_ON_STATE(state, layer) layer_state_cmp(state, layer)
 #define IS_LAYER_OFF_STATE(state, layer) !layer_state_cmp(state, layer)
 
