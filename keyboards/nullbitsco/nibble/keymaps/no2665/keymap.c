@@ -58,7 +58,6 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
     _______, _______, _______, _______, _______, _______, _______, _______, _______,DF(_MAC), _______, _______, _______, _______, _______, _______,
     _______, _______, _______, _______,                            _______,                   _______, _______, _______, KC_MPRV, KC_MPLY, KC_MNXT
   ),
-
 };
 
 /**
@@ -315,9 +314,11 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
 
     // Layer specific keycode overrides
     bool shift = get_mods() & MOD_MASK_SHIFT;
+    bool gui = get_mods() & MOD_MASK_GUI;
 
     if ( IS_DEFAULT_LAYER_ON(_MAC) ) {
         static bool shifted_kc_nubs = false;
+        static bool guied_kc_nuhs = false;
 
         switch ( keycode ) {
             case KC_NUBS: // Creating the # ~ key
@@ -340,6 +341,72 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
                         return send_alternate_keycode(KC_LALT, record);
                     }
                 }
+                break;
+            case KC_NUHS: // Creating the normal Cmd + ` combo for switching characters. ` is normally next to the left shift
+                if ( record->event.pressed ) {
+                    if ( gui ) {
+                        // Send backslash
+                        guied_kc_nuhs = true;
+                        return send_alternate_keycode(KC_NUBS, record);
+                    } else {
+                        // Do nothing
+                        guied_kc_nuhs = false;
+                    }
+                } else { // released
+                    if ( guied_kc_nuhs ) {
+                        // Remove backslash
+                        return send_alternate_keycode(KC_NUBS, record);
+                    } else {
+                        // Do nothing
+                    }
+                }
+                break;
+        }
+    }
+
+    if ( IS_DEFAULT_LAYER_ON(_WIN) ) {
+        static bool shifted_kc_2 = false;
+        static bool shifted_kc_quot = false;
+
+        switch ( keycode ) {
+            case KC_2: // Send @ instead of " on Windows
+                if ( record->event.pressed ) {
+                    if ( shift ) {
+                        // Send @
+                        shifted_kc_2 = true;
+                        return send_alternate_keycode(KC_QUOT, record);
+                    } else {
+                        // Do nothing
+                        shifted_kc_2 = false;
+                    }
+                } else { // released
+                    if ( shifted_kc_2 ) {
+                        // remove "
+                        return send_alternate_keycode(KC_QUOT, record);
+                    } else {
+                        // Do nothing
+                    }
+                }
+                break;
+            case KC_QUOT: // Send " instead of @ on Windows
+                if ( record->event.pressed ) {
+                    if ( shift ) {
+                        // Send @
+                        shifted_kc_quot = true;
+                        return send_alternate_keycode(KC_2, record);
+                    } else {
+                        // Do nothing
+                        shifted_kc_quot = false;
+                    }
+                } else { // released
+                    if ( shifted_kc_quot ) {
+                        // remove "
+                        return send_alternate_keycode(KC_2, record);
+                    } else {
+                        // Do nothing
+                    }
+                }
+                break;
         }
     }
 
