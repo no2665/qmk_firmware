@@ -42,7 +42,7 @@ void render_windows(uint8_t x, uint8_t y) {
     oled_write_raw_P(windows, sizeof(windows));
 }
 
-void oled_task_animation_layer_icons(void) {
+bool oled_task_animation_layer_icons(void) {
     // Layer states
     if ( IS_DEFAULT_LAYER_ON(_MAC) ) {
         render_apple(0, 0);
@@ -50,6 +50,7 @@ void oled_task_animation_layer_icons(void) {
     if ( IS_DEFAULT_LAYER_ON(_WIN) ) {
         render_windows(0, 0);
     }
+    return false;
 }
 
 AnimationObserver* create_layer_icons_animation(void) {

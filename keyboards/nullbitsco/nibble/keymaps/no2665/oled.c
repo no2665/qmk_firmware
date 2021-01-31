@@ -16,7 +16,10 @@ void oled_task_user(void) {
     AnimationNode_t* node = &observers;
     while ( node != NULL && node->item != NULL ) {
         if ( node->item->oledTaskUser != NULL ) {
-            node->item->oledTaskUser();
+            bool stop = node->item->oledTaskUser();
+            if ( stop ) {
+                return;
+            }
         }
         node = node->next;
     }
@@ -53,14 +56,19 @@ bool process_record_oled(uint16_t keycode, keyrecord_t *record) {
 void keyboard_post_init_oled(void) {
     AnimationNode_t* node = &observers;
 
+
+    AnimationObserver* startup = create_startup_animation();
+    node->item = startup;
+
     AnimationObserver* matrix = create_matrix_animation();
-    node->item = matrix;
+    AnimationNode_t* mNode = (AnimationNode_t*) malloc(sizeof(AnimationNode_t));
+    mNode->item = matrix;
+    mNode->next = NULL;
 
     AnimationObserver* layerIcons = create_layer_icons_animation();
-
     AnimationNode_t* liNode = (AnimationNode_t*) malloc(sizeof(AnimationNode_t));
     liNode->item = layerIcons;
-    liNode->next = NULL;
+    liNode->next = mNode;
 
     node->next = liNode;
 

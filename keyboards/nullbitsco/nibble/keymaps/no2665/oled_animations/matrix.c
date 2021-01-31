@@ -41,7 +41,7 @@ void add_character_to_screen(char c) {
     Character n;
     n.character = c;
     n.y         = 0;
-    n.x         = rand() % ( OLED_DISPLAY_HEIGHT - OLED_FONT_WIDTH );
+    n.x         = rand() % ( oled_get_display_width() - OLED_FONT_WIDTH );
     n.last_update = timer_read32();
     n.speed     = rand() % 3;
 
@@ -118,7 +118,7 @@ uint8_t update_character( uint8_t idx ) {
  */
 bool remove_character_at( uint8_t idx ) {
     Character c = characters[idx];
-    if ( c.y > OLED_DISPLAY_WIDTH + OLED_FONT_HEIGHT ) {
+    if ( c.y > oled_get_display_height() + OLED_FONT_HEIGHT ) {
         for ( uint8_t x = idx + 1; x < characters_size; x++ ) {
             characters[x - 1] = characters[x];
         }
@@ -174,7 +174,7 @@ bool process_record_animation_matrix(uint16_t keycode, keyrecord_t *record) {
     return true;
 }
 
-void oled_task_animation_matrix(void) {
+bool oled_task_animation_matrix(void) {
     // Falling characters animation
     if ( characters_size > 0 ) {
         // Possibly rollover character_to_update
@@ -189,6 +189,7 @@ void oled_task_animation_matrix(void) {
             character_to_update += 1;
         }
     }
+    return false;
 }
 
 AnimationObserver* create_matrix_animation(void) {
