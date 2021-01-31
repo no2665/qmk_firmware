@@ -462,6 +462,23 @@ void oled_pan(bool left) {
     oled_dirty = OLED_ALL_BLOCKS_MASK;
 }
 
+void oled_pan_down(void) {
+    uint16_t i = 0;
+    uint16_t i_above = 0;
+    for (uint16_t y = (oled_get_display_height() / 8) - 1; y > 0 ; y--) {
+        for (uint16_t x = 0; x < oled_get_display_width() - 1; x++) {
+            i              = y * oled_get_display_width() + x;
+            i_above        = (y - 1) * oled_get_display_width() + x;
+            uint8_t buffer_above = 0;
+            if ( i_above >= 0 ) {
+                buffer_above = oled_buffer[i_above];
+            }
+            oled_buffer[i] = oled_buffer[i] << 1 | buffer_above >> 7;
+        }
+    }
+    oled_dirty = OLED_ALL_BLOCKS_MASK;
+}
+
 oled_buffer_reader_t oled_read_raw(uint16_t start_index) {
     if (start_index > OLED_MATRIX_SIZE) start_index = OLED_MATRIX_SIZE;
     oled_buffer_reader_t ret_reader;
@@ -679,6 +696,20 @@ uint8_t oled_max_lines(void) {
         return OLED_DISPLAY_HEIGHT / OLED_FONT_HEIGHT;
     }
     return OLED_DISPLAY_WIDTH / OLED_FONT_HEIGHT;
+}
+
+uint8_t oled_get_display_height(void) {
+    if (!HAS_FLAGS(oled_rotation, OLED_ROTATION_90)) {
+        return OLED_DISPLAY_HEIGHT;
+    }
+    return OLED_DISPLAY_WIDTH;
+}
+
+uint8_t oled_get_display_width(void) {
+    if (!HAS_FLAGS(oled_rotation, OLED_ROTATION_90)) {
+        return OLED_DISPLAY_WIDTH;
+    }
+    return OLED_DISPLAY_HEIGHT;
 }
 
 void oled_task(void) {
