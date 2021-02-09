@@ -9,6 +9,16 @@ typedef struct AnimationNode {
 
 static AnimationNode_t observers;
 
+bool flag_can_render = false;
+
+void set_flag_can_render(bool b) {
+    flag_can_render = b;
+}
+
+bool get_flag_can_render(void) {
+    return flag_can_render;
+}
+
 /**
  * Output to screen
  */
@@ -56,19 +66,23 @@ bool process_record_oled(uint16_t keycode, keyrecord_t *record) {
 void keyboard_post_init_oled(void) {
     AnimationNode_t* node = &observers;
 
-
     AnimationObserver* startup = create_startup_animation();
     node->item = startup;
 
-    AnimationObserver* matrix = create_matrix_animation();
+    /*AnimationObserver* matrix = create_matrix_animation();
     AnimationNode_t* mNode = (AnimationNode_t*) malloc(sizeof(AnimationNode_t));
     mNode->item = matrix;
-    mNode->next = NULL;
+    mNode->next = NULL;*/
+
+    AnimationObserver* stats = create_stats_animation();
+    AnimationNode_t* statsNode = (AnimationNode_t*) malloc(sizeof(AnimationNode_t));
+    statsNode->item = stats;
+    statsNode->next = NULL;
 
     AnimationObserver* layerIcons = create_layer_icons_animation();
     AnimationNode_t* liNode = (AnimationNode_t*) malloc(sizeof(AnimationNode_t));
     liNode->item = layerIcons;
-    liNode->next = mNode;
+    liNode->next = statsNode;
 
     node->next = liNode;
 

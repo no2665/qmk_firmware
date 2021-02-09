@@ -524,6 +524,24 @@ void oled_write_pixel(uint8_t x, uint8_t y, bool on) {
     }
 }
 
+void oled_write_pixel_xor(uint8_t x, uint8_t y, bool on) {
+    if (x >= oled_rotation_width) {
+        return;
+    }
+    uint16_t index = x + (y / 8) * oled_rotation_width;
+    if (index >= OLED_MATRIX_SIZE) {
+        return;
+    }
+    uint8_t data = oled_buffer[index];
+    if (on) {
+        data ^= (1 << (y % 8));
+    }
+    if (oled_buffer[index] != data) {
+        oled_buffer[index] = data;
+        oled_dirty |= ((OLED_BLOCK_TYPE)1 << (index / OLED_BLOCK_SIZE));
+    }
+}
+
 #if defined(__AVR__)
 void oled_write_P(const char *data, bool invert) {
     uint8_t c = pgm_read_byte(data);
