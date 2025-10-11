@@ -51,30 +51,24 @@ led_config_t g_led_config = { {
     // underglow
     2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
     // bottom row
-    4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+    1, 1, 1, 1, 1, 1, 1, 4, 1, 1, 1,
     // 2nd row up
-    4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+    1, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 1, 1,
     // 3rd row up
-    4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+    1, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 1,
     // 4th row up
-    4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+    1, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 1, 1, 1, 1,
     // 5th row up
-    4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+    1, 1, 1, 1, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
     // top row
-    4, 8, 8, 8, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4
+    1, 8, 8, 8, 4, 4, 4, 4, 1, 1, 1, 1, 4, 4, 4, 4, 1, 1, 1
 } };
 
-void suspend_power_down_kb(void) {
-    rgb_matrix_set_suspend_state(true);
-    suspend_power_down_user();
-}
 
-void suspend_wakeup_init_kb(void) {
-    rgb_matrix_set_suspend_state(false);
-    suspend_wakeup_init_user();
-}
-
-void rgb_matrix_indicators_user(void) {
+bool rgb_matrix_indicators_kb(void) {
+    if (!rgb_matrix_indicators_user()) {
+        return false;
+    }
     led_t host_leds = host_keyboard_led_state();
     if (host_leds.scroll_lock) {
         rgb_matrix_set_color(92, 0xFF, 0x0, 0x0);
@@ -91,4 +85,5 @@ void rgb_matrix_indicators_user(void) {
     } else {
         rgb_matrix_set_color(94, 0x0, 0x0, 0x0);
     }
+    return true;
 }
