@@ -22,17 +22,18 @@ bool get_flag_can_render(void) {
 /**
  * Output to screen
  */
-void oled_task_user(void) {
+bool oled_task_user(void) {
     AnimationNode_t* node = &observers;
     while ( node != NULL && node->item != NULL ) {
         if ( node->item->oledTaskUser != NULL ) {
             bool stop = node->item->oledTaskUser();
             if ( stop ) {
-                return;
+                return false;
             }
         }
         node = node->next;
     }
+    return false;
 }
 
 /**

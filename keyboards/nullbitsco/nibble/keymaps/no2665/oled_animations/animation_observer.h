@@ -11,7 +11,7 @@ typedef struct {
     KeyboardPostInitUserNotification keyboardPostInitUser;
 } AnimationObserver;
 
-AnimationObserver* create_matrix_animation(void);
+//AnimationObserver* create_matrix_animation(void);
 AnimationObserver* create_layer_icons_animation(void);
 AnimationObserver* create_startup_animation(void);
 AnimationObserver* create_stats_animation(void);

@@ -78,6 +78,9 @@ extern layer_state_t default_layer_state;
 void                 default_layer_debug(void);
 void                 default_layer_set(layer_state_t state);
 
+bool default_layer_state_is(uint8_t layer);
+bool default_layer_state_cmp(layer_state_t layer1, uint8_t layer2);
+
 __attribute__((weak)) layer_state_t default_layer_state_set_modules(layer_state_t state);
 __attribute__((weak)) layer_state_t default_layer_state_set_kb(layer_state_t state);
 __attribute__((weak)) layer_state_t default_layer_state_set_user(layer_state_t state);

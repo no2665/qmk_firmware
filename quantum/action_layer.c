@@ -71,6 +71,26 @@ void default_layer_set(layer_state_t state) {
     default_layer_state_set(state);
 }
 
+/** \brief Default layer state is
+ *
+ * Return whether the given default state is on (it might still be shadowed by a higher default state, though)
+ */
+bool default_layer_state_is(uint8_t layer) {
+    return default_layer_state_cmp(default_layer_state, layer);
+}
+
+/** \brief Default layer state compare
+ *
+ * Used for comparing default layers {mostly used for unit testing}
+ */
+bool default_layer_state_cmp(layer_state_t cmp_layer_state, uint8_t layer) {
+    if (!cmp_layer_state) {
+        return layer == 0;
+    }
+    return (cmp_layer_state & (1UL << layer)) != 0;
+}
+
+
 #ifndef NO_ACTION_LAYER
 /** \brief Default Layer Or
  *

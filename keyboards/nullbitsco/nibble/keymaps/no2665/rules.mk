@@ -1,4 +1,6 @@
-OLED_DRIVER_ENABLE = yes
+OLED_ENABLE = yes
+OLED_DRIVER = ssd1306
+OLED_TRANSPORT = i2c
 WPM_ENABLE = yes
 
 SRC += 	oled.c \
